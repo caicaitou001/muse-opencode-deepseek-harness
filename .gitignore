@@ -1,7 +1,18 @@
 # API keys / secrets
 .env
+.env.*
+!.env.example
 *.key
+*.pem
+*.p12
+*.pfx
 credentials.yaml
+.credentials.*
+secrets.yaml
+config.yaml
+*.secret
+auth.json
+cookies*.txt
 
 # OS
 Thumbs.db
@@ -11,5 +22,10 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Script local output
+# Logs / caches
+*.log
+logs/
+tmp/
 *.tmp
+.DS_Store
+.cache/
