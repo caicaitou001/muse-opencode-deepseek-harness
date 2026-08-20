@@ -235,6 +235,28 @@ muse-dsh-fix/
 
 ---
 
+## 八、安全说明 / Security
+
+> **Never commit API keys, OAuth tokens, credentials, or `.env` files.**
+
+- 本仓库**不包含任何真实 API key**；`OPENCODE_GO_API_KEY` 只作为环境变量名出现。
+- 验证脚本从环境变量或 `~/.dsh/.credentials.yaml` 读取 key，**不硬编码**。
+- 请通过环境变量（或你本地的凭据文件）配置 key，勿将其写入任何仓库文件。
+- 如误将凭据提交，立即**轮换（rotate）该 key** 并从历史中移除——仅删除文件不够。
+
+---
+
 ## License
 
 [MIT](LICENSE)
+
+### Third-party attribution / 第三方声明
+
+本仓库的 `patches/` 补丁基于以下 MIT 许可的开源项目的代码修改而来，特此致谢并保留其版权声明：
+
+| 项目 | 许可证 | 使用方式 |
+| --- | --- | --- |
+| [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) | MIT (Copyright (c) 2026 DeepSeek) | `patches/` 修改自其 `packages/llm/llm-pi-ai/src/stream.ts` 与 `catalog.ts` |
+| [pi-ai](https://github.com/earendil-works/pi-ai) | MIT | 文档中分析的 responses 协议实现；本项目不包含其源码副本 |
+
+> 详见 [`NOTICE`](NOTICE)。

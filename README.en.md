@@ -232,6 +232,28 @@ muse-dsh-fix/
 
 ---
 
+## 8. Security
+
+> **Never commit API keys, OAuth tokens, credentials, or `.env` files.**
+
+- This repo contains **no real API key**; `OPENCODE_GO_API_KEY` appears only as an environment variable name.
+- The verification scripts read the key from an env var or `~/.dsh/.credentials.yaml`; they **never hardcode** it.
+- Configure the key via an environment variable (or your local credentials file); never write it into any repository file.
+- If you accidentally commit a credential, **rotate the key** and remove it from history — deleting the file alone is not enough.
+
+---
+
 ## License
 
 [MIT](LICENSE)
+
+### Third-party attribution
+
+The `patches/` in this repo are modifications derived from MIT-licensed open-source projects; credit and copyright notices are preserved:
+
+| Project | License | Usage |
+| --- | --- | --- |
+| [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) | MIT (Copyright (c) 2026 DeepSeek) | `patches/` modify its `packages/llm/llm-pi-ai/src/stream.ts` and `catalog.ts` |
+| [pi-ai](https://github.com/earendil-works/pi-ai) | MIT | analyzed in docs; no source copy is included |
+
+> See [`NOTICE`](NOTICE).

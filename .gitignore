@@ -29,3 +29,8 @@ tmp/
 *.tmp
 .DS_Store
 .cache/
+
+# PowerShell / local test artifacts
+*.ps1.bak
+*.psm1
+transcript*.txt
