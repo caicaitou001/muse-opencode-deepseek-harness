@@ -1,0 +1,15 @@
+# API keys / secrets
+.env
+*.key
+credentials.yaml
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+
+# Script local output
+*.tmp

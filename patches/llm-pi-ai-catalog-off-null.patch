@@ -1,0 +1,236 @@
+diff --git a/packages/llm/llm-pi-ai/src/catalog.ts b/packages/llm/llm-pi-ai/src/catalog.ts
+index 7a4ff7e8a2..1b796cc02a 100644
+--- a/packages/llm/llm-pi-ai/src/catalog.ts
++++ b/packages/llm/llm-pi-ai/src/catalog.ts
+@@ -20,6 +20,7 @@ import type {
+   ModelCost,
+   ModelThinkingLevel,
+   OpenAICompletionsCompat,
++  OpenAIResponsesCompat,
+   Provider,
+   ThinkingLevelMap,
+ } from '@earendil-works/pi-ai'
+@@ -196,6 +197,15 @@ export interface PiAiCompatProfile {
+   thinkingFormat?: PiAiThinkingFormat
+   /** Whether the endpoint accepts `reasoning_effort`; absent keeps the catalog entry's, then pi-ai's baseURL-derived guess. */
+   supportsReasoningEffort?: boolean
++  /** Whether a reasoning model's system prompt may use the `developer` role; absent keeps the catalog entry's, then pi-ai's baseURL-derived guess. */
++  supportsDeveloperRole?: boolean
++  /**
++   * Replayed assistant messages in DeepSeek chat style (`content` string plus
++   * `reasoning_content`) instead of responses items, for an openai-responses
++   * gateway that translates to DeepSeek semantics and rejects replayed
++   * reasoning items. `openai` (the default) replays responses items.
++   */
++  assistantThinkingFormat?: 'openai' | 'deepseek'
+ }
+ 
+ /** One configured model entry: an id plus the catalog fields it overrides. */
+@@ -204,6 +214,21 @@ export interface PiAiModelProfile {
+   id: string
+   /** Display name for selectors; defaults to the catalog name, then the id. */
+   name?: string
++  /**
++   * Wire protocol this model speaks, for a hand-declared model on a route whose
++   * installed catalog does not describe it (or describes siblings in several
++   * protocols, so no single route `api` fits). Absent falls back to the route
++   * `api`, then the installed entry's own, then the protocol its catalog
++   * siblings agree on.
++   */
++  api?: string
++  /**
++   * Endpoint for this model, for a hand-declared model on a route whose
++   * installed catalog does not describe it (or whose siblings do not share one
++   * endpoint). Absent falls back to the route `baseURL`, then the installed
++   * entry's own, then the catalog provider's.
++   */
++  baseURL?: string
+   /** Maximum combined request and response context in tokens. */
+   contextWindow?: number
+   /**
+@@ -304,18 +329,21 @@ interface ModelReasoning {
+  * own defaulting is asymmetric — an absent key means "supported" for the five
+  * base levels but "unsupported" for `xhigh`/`max` — and a profile author
+  * should not need to know that. A declared `off` with no value is the one
+- * exception: it stays absent from the map, which pi-ai reads as "supported,
+- * send nothing" — the correct dispatch where not thinking is the parameter's
+- * absence — while `off` with a value sends that value.
++ * exception: on openai-completions it stays absent from the map (supported,
++ * `thinking: { type: 'disabled' }`), while on openai-responses it lands as
++ * `null` (omit the reasoning block — the gateway rejects the literal "none"
++ * an absent key would make it send).
+  * @param provider - provider route key, for diagnostics.
+  * @param entry - the configured model entry.
+  * @param base - the installed catalog entry of the same id, when one exists.
++ * @param api - resolved wire protocol, which decides the `off: null` spelling.
+  * @returns the reasoning fields the materialized model carries.
+  */
+ function resolveModelReasoning(
+   provider: string,
+   entry: PiAiModelProfile,
+   base: Model<Api> | undefined,
++  api: string,
+ ): ModelReasoning {
+   const efforts = entry.reasoningEfforts
+   if (efforts === undefined) {
+@@ -361,7 +389,12 @@ function resolveModelReasoning(
+     const wire = efforts[level]
+     if (wire === undefined) {
+       map[level] = null
+-    } else if (wire !== null) {
++    } else if (wire === null) {
++      // `off: null` is `thinking: { type: 'disabled' }` on
++      // openai-completions (an absent key) but "omit the block" on
++      // openai-responses, where the gateway rejects the literal "none".
++      if (api === 'openai-responses') map[level] = null
++    } else {
+       map[level] = wire
+     }
+   }
+@@ -391,31 +424,57 @@ function resolveModelCompat(
+   route: PiAiCompatProfile | undefined,
+   base: Model<Api> | undefined,
+   api: string,
+-): { compat: OpenAICompletionsCompat } | Record<string, never> {
++): { compat: OpenAICompletionsCompat | OpenAIResponsesCompat } | Record<string, never> {
+   const thinkingFormat = entry.compat?.thinkingFormat ?? route?.thinkingFormat
+   const supportsReasoningEffort = entry.compat?.supportsReasoningEffort ?? route?.supportsReasoningEffort
+-  if (thinkingFormat === undefined && supportsReasoningEffort === undefined) return {}
+-  if (api !== 'openai-completions') {
+-    if (entry.compat?.thinkingFormat !== undefined || entry.compat?.supportsReasoningEffort !== undefined) {
++  const supportsDeveloperRole = entry.compat?.supportsDeveloperRole ?? route?.supportsDeveloperRole
++  const assistantThinkingFormat = entry.compat?.assistantThinkingFormat ?? route?.assistantThinkingFormat
++  if (thinkingFormat === undefined && supportsReasoningEffort === undefined
++    && supportsDeveloperRole === undefined && assistantThinkingFormat === undefined) {
++    return {}
++  }
++  if (api === 'openai-completions') {
++    if (entry.compat?.assistantThinkingFormat !== undefined) {
++      invalid(provider, `model "${entry.id}" sets compat.assistantThinkingFormat, but its api is "${api}";`
++        + ' assistantThinkingFormat exists only on openai-responses')
++    }
++    // The installed entry's compat matches the entry's OWN api — a route-level
++    // `api` repoint (an anthropic catalog served through an OpenAI-compatible
++    // gateway) leaves `base.compat` in the other protocol's shape, so it is
++    // inherited only while the resolved api still is the entry's. A repointed
++    // model starts from pi-ai's baseURL-derived detection instead, which is
++    // what a protocol change means for every other compat field too.
++    const inherited: OpenAICompletionsCompat | undefined = base?.api === api ? base.compat : undefined
++    return {
++      compat: {
++        ...inherited,
++        ...thinkingFormat === undefined ? {} : { thinkingFormat },
++        ...supportsReasoningEffort === undefined ? {} : { supportsReasoningEffort },
++        ...supportsDeveloperRole === undefined ? {} : { supportsDeveloperRole },
++      },
++    }
++  }
++  if (api === 'openai-responses') {
++    if (entry.compat?.thinkingFormat !== undefined || entry.compat?.supportsReasoningEffort !== undefined
++      || entry.compat?.supportsDeveloperRole !== undefined) {
+       invalid(provider, `model "${entry.id}" sets compat reasoning switches, but its api is "${api}";`
+-        + ' thinkingFormat and supportsReasoningEffort exist only on openai-completions')
++        + ' thinkingFormat, supportsReasoningEffort, and supportsDeveloperRole exist only on openai-completions')
++    }
++    const inherited: OpenAIResponsesCompat | undefined = base?.api === api ? base.compat : undefined
++    return {
++      compat: {
++        ...inherited,
++        ...assistantThinkingFormat === undefined ? {} : { assistantThinkingFormat },
++      } as OpenAIResponsesCompat,
+     }
+-    return {}
+   }
+-  // The installed entry's compat matches the entry's OWN api — a route-level
+-  // `api` repoint (an anthropic catalog served through an OpenAI-compatible
+-  // gateway) leaves `base.compat` in the other protocol's shape, so it is
+-  // inherited only while the resolved api still is the entry's. A repointed
+-  // model starts from pi-ai's baseURL-derived detection instead, which is
+-  // what a protocol change means for every other compat field too.
+-  const inherited: OpenAICompletionsCompat | undefined = base?.api === api ? base.compat : undefined
+-  return {
+-    compat: {
+-      ...inherited,
+-      ...thinkingFormat === undefined ? {} : { thinkingFormat },
+-      ...supportsReasoningEffort === undefined ? {} : { supportsReasoningEffort },
+-    },
++  if (entry.compat?.thinkingFormat !== undefined || entry.compat?.supportsReasoningEffort !== undefined
++    || entry.compat?.supportsDeveloperRole !== undefined || entry.compat?.assistantThinkingFormat !== undefined) {
++    invalid(provider, `model "${entry.id}" sets compat fields, but its api is "${api}";`
++      + ' thinkingFormat, supportsReasoningEffort, and supportsDeveloperRole exist only on openai-completions,'
++      + ' assistantThinkingFormat only on openai-responses')
+   }
++  return {}
+ }
+ 
+ /** One route's materialized catalog, plus the request caps its profile chose. */
+@@ -485,8 +544,6 @@ export function resolveRouteModels(request: RouteCatalogRequest): RouteCatalog {
+       + ' must be listed in configuration')
+   }
+   const routeApi = sharedCatalogApi(defaults)
+-  const routeCompatDefined = request.compat?.thinkingFormat !== undefined
+-    || request.compat?.supportsReasoningEffort !== undefined
+   const seen = new Set<string>()
+   const configuredMaxTokens = new Map<string, number>()
+   const models = entries.map((entry) => {
+@@ -494,12 +551,12 @@ export function resolveRouteModels(request: RouteCatalogRequest): RouteCatalog {
+     if (seen.has(entry.id)) invalid(provider, `lists model "${entry.id}" more than once`)
+     seen.add(entry.id)
+     const base = defaults.get(entry.id)
+-    const api = request.api ?? base?.api ?? routeApi
++    const api = entry.api ?? request.api ?? base?.api ?? routeApi
+     if (api === undefined) {
+       invalid(provider, `model "${entry.id}" needs an api; the installed catalog does not describe it, so set the`
+         + ' route\'s api to the wire protocol its endpoint speaks')
+     }
+-    const baseUrl = request.baseURL ?? base?.baseUrl ?? providerBaseUrl
++    const baseUrl = entry.baseURL ?? request.baseURL ?? base?.baseUrl ?? providerBaseUrl
+     if (baseUrl === undefined) {
+       invalid(provider, `model "${entry.id}" needs a baseURL; the installed catalog does not describe this route`)
+     }
+@@ -534,13 +591,19 @@ export function resolveRouteModels(request: RouteCatalogRequest): RouteCatalog {
+       cost: base?.cost ?? NO_COST,
+       contextWindow,
+       maxTokens,
+-      ...resolveModelReasoning(provider, entry, base),
++      ...resolveModelReasoning(provider, entry, base, api),
+       ...resolveModelCompat(provider, entry, request.compat, base, api),
+     }
+   })
+-  if (routeCompatDefined && !models.some(model => model.api === 'openai-completions')) {
+-    invalid(provider, 'sets compat reasoning switches, but no model on the route speaks openai-completions;'
+-      + ' thinkingFormat and supportsReasoningEffort exist only on that protocol')
++  const routeCompletionsCompat = request.compat?.thinkingFormat !== undefined
++    || request.compat?.supportsReasoningEffort !== undefined
++    || request.compat?.supportsDeveloperRole !== undefined
++  const routeResponsesCompat = request.compat?.assistantThinkingFormat !== undefined
++  if ((routeCompletionsCompat && !models.some(model => model.api === 'openai-completions'))
++    || (routeResponsesCompat && !models.some(model => model.api === 'openai-responses'))) {
++    invalid(provider, 'sets compat reasoning switches, but no model on the route speaks the protocol they fit;'
++      + ' thinkingFormat, supportsReasoningEffort, and supportsDeveloperRole exist only on openai-completions,'
++      + ' assistantThinkingFormat only on openai-responses')
+   }
+   return { models, configuredMaxTokens }
+ }
+diff --git a/packages/llm/llm-pi-ai/src/config.ts b/packages/llm/llm-pi-ai/src/config.ts
+index 4e8e032df0..d451143bbf 100644
+--- a/packages/llm/llm-pi-ai/src/config.ts
++++ b/packages/llm/llm-pi-ai/src/config.ts
+@@ -188,6 +188,8 @@ const thinkingBudgets = z.object({
+ const compatProfile: z<PiAiCompatProfile> = z.object({
+   thinkingFormat: z.union(SUPPORTED_THINKING_FORMATS),
+   supportsReasoningEffort: z.boolean(),
++  supportsDeveloperRole: z.boolean(),
++  assistantThinkingFormat: z.union(['openai', 'deepseek']),
+ })
+ 
+ /**
+@@ -208,6 +210,8 @@ const reasoningEfforts = z.dict(
+ /** The fields a `models` entry and a `modelOverrides` value share; only the id's home differs. */
+ const modelFields = {
+   name: z.string(),
++  api: z.union(supportedProtocols()),
++  baseURL: z.string(),
+   contextWindow: z.number().step(1).min(1),
+   maxTokens: z.number().step(1).min(1),
+   // No explicit default, unlike the route's `defaultInput`: schemastery

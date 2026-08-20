@@ -1,0 +1,81 @@
+diff --git a/packages/llm/llm-pi-ai/src/stream.ts b/packages/llm/llm-pi-ai/src/stream.ts
+index 22aa7cb579..d83770b524 100644
+--- a/packages/llm/llm-pi-ai/src/stream.ts
++++ b/packages/llm/llm-pi-ai/src/stream.ts
+@@ -14,6 +14,29 @@ import { isContextOverflow } from '@earendil-works/pi-ai'
+ import type { AssistantMessage, AssistantMessageEvent, Usage as PiUsage } from '@earendil-works/pi-ai'
+ import { toPiReplayState } from './replay.ts'
+ 
++/**
++ * Hoist a block signature pi-ai stored on the terminal content block of a
++ * streamed turn, so replay can carry it forward. pi-ai's terminal events carry
++ * only `content` and `partial`; the signature lives on the block at
++ * `contentIndex` inside `partial.content`.
++ * @param event - a terminal block event (`text_end` / `thinking_end`).
++ * @param key - the signature field to read.
++ * @returns the signature, or nothing when the block lacks it.
++ */
++function blockSignature(
++  event: { contentIndex: number; partial: AssistantMessage },
++  key: 'textSignature' | 'thinkingSignature',
++): string | undefined {
++  const block = event.partial.content[event.contentIndex]
++  if (block === undefined) return undefined
++  const signature = key === 'textSignature' && block.type === 'text'
++    ? block.textSignature
++    : key === 'thinkingSignature' && block.type === 'thinking'
++      ? block.thinkingSignature
++      : undefined
++  return typeof signature === 'string' ? signature : undefined
++}
++
+ /**
+  * Map pi-ai usage (reasoning folded into output by pi-ai).
+  * @param usage - cumulative usage from the terminal pi-ai event.
+@@ -140,7 +163,21 @@ export async function* toStreamChunks(
+         yield { type: 'text-delta', index: event.contentIndex, text: event.delta }
+         break
+       case 'text_end':
+-        yield { type: 'block-end', index: event.contentIndex, block: { type: 'text', text: event.content } }
++        // pi-ai's terminal text block carries the responses message id
++        // (`textSignature`), which replay must preserve to keep multi-turn
++        // responses stateless; the partial content at this index is that
++        // block, so hoist its signature instead of dropping it.
++        yield {
++          type: 'block-end',
++          index: event.contentIndex,
++          block: {
++            type: 'text',
++            text: event.content,
++            ...blockSignature(event, 'textSignature') !== undefined
++              ? { textSignature: blockSignature(event, 'textSignature') }
++              : {},
++          },
++        }
+         break
+       case 'thinking_start':
+         yield { type: 'block-start', index: event.contentIndex, blockType: 'reasoning' }
+@@ -149,7 +186,22 @@ export async function* toStreamChunks(
+         yield { type: 'reasoning-delta', index: event.contentIndex, text: event.delta }
+         break
+       case 'thinking_end':
+-        yield { type: 'block-end', index: event.contentIndex, block: { type: 'reasoning', text: event.content } }
++        // The responses reasoning item (including its `encrypted_content`)
++        // must be replayed verbatim on the next turn; pi-ai stores it as the
++        // block's `thinkingSignature`, which lives on the partial's content
++        // block at this index. Dropping it loses the reasoning state and the
++        // gateway rejects the turn (`reasoning_content must be passed back`).
++        yield {
++          type: 'block-end',
++          index: event.contentIndex,
++          block: {
++            type: 'reasoning',
++            text: event.content,
++            ...blockSignature(event, 'thinkingSignature') !== undefined
++              ? { thinkingSignature: blockSignature(event, 'thinkingSignature') }
++              : {},
++          },
++        }
+         break
+       case 'toolcall_start': {
+         // The id/name live on the partial's content at this index.

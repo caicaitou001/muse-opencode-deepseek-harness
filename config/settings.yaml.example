@@ -1,0 +1,50 @@
+# =============================================================================
+# 使 muse-spark-1.2-contributor 在 DeepSeek Harness 中正常工作
+# Make muse-spark-1.2-contributor work correctly in DeepSeek Harness
+#
+# 放置位置 / Where it goes:  ~/.dsh/settings.yaml  (merge under llm-pi-ai)
+#
+# 关键点 / Key points:
+#   - api: openai-responses          ← 必须，Muse 只认 Responses 协议
+#   - baseURL: https://opencode.ai/zen/go/v1
+#   - reasoningEfforts.xhigh         ← Muse 支持 xhigh（没有 max）
+#   - off: null                      ← responses 通道下 = 省略 reasoning 块
+#   - 不要加 assistantThinkingFormat: deepseek 之类的补丁
+# =============================================================================
+llm-pi-ai:
+  providers:
+    opencode-go:
+      # 你的 OpenCode Zen Go API key（也可是 OPENCODE_GO_API_KEY 环境变量）
+      apiKeyEnv: OPENCODE_GO_API_KEY
+      models:
+        # ---- 可选：其它 opencode-go 模型（只列 id 即可继承目录默认）----
+        - id: deepseek-v4-flash
+        - id: deepseek-v4-pro
+        - id: minimax-m3
+        - id: grok-4.5
+        # ---- Muse Spark 1.2 Contributor（本仓库重点）----
+        - id: muse-spark-1.2-contributor
+          name: Muse Spark 1.2 Contributor
+          # 关键：Responses 协议，不是 chat/completions，也不是 anthropic
+          api: openai-responses
+          baseURL: https://opencode.ai/zen/go/v1
+          # 与 models.opencode.ai 目录一致
+          contextWindow: 1048576
+          maxTokens: 131072
+          # Muse 官方 effort 值：minimal / low / medium / high / xhigh
+          # （没有 max；这里把 max 映射到 xhigh 以便 UI 有 Max 档）
+          reasoningEfforts:
+            off: null
+            minimal: minimal
+            low: low
+            medium: medium
+            high: high
+            xhigh: xhigh
+            max: xhigh
+
+# =============================================================================
+# 补充：如果你同时用 b-ai / deepseek 等其它 provider，保持原样即可
+# =============================================================================
+# agent-default-model:
+#   provider: opencode-go
+#   model: muse-spark-1.2-contributor
