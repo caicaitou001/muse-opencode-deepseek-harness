@@ -7,6 +7,7 @@
 # 关键点 / Key points:
 #   - api: openai-responses          ← 必须，Muse 只认 Responses 协议
 #   - baseURL: https://opencode.ai/zen/go/v1
+#   - input: [text, image]           ← 必须声明 image，否则 harness 拒绝图片上传
 #   - reasoningEfforts.xhigh         ← Muse 支持 xhigh（没有 max）
 #   - off: null                      ← responses 通道下 = 省略 reasoning 块
 #   - 不要加 assistantThinkingFormat: deepseek 之类的补丁
@@ -31,6 +32,11 @@ llm-pi-ai:
           # 与 models.opencode.ai 目录一致
           contextWindow: 1048576
           maxTokens: 131072
+          # 必须声明 image，否则 harness 会拒绝图片上传
+          # （Muse 目录里 modalities.input = [text, image, video, pdf, audio]）
+          input:
+            - text
+            - image
           # Muse 官方 effort 值：minimal / low / medium / high / xhigh
           # （没有 max；这里把 max 映射到 xhigh 以便 UI 有 Max 档）
           reasoningEfforts:

@@ -10,7 +10,7 @@
 | 网关 | OpenCode Zen Go — `https://opencode.ai/zen/go/v1` |
 | 协议（正确） | **OpenAI Responses API** (`openai-responses`) |
 | 宿主 | DeepSeek Harness (`deepseek-harness`), LLM 适配层 `@deepseek-ai/dsh-llm-pi-ai` → `@earendil-works/pi-ai` |
-| 状态 | ✅ 已验证：多轮 + thinking 回传 + 工具调用正常 |
+| 状态 | ✅ 已验证：多轮 + thinking 回传 + 工具调用 + **图片输入** 正常 |
 
 ---
 
@@ -160,6 +160,9 @@ llm-pi-ai:
             high: high
             xhigh: xhigh                     # Muse 支持 xhigh（没有 max）
             max: xhigh
+          input:
+            - text
+            - image                          # 必须声明，否则 harness 拒绝图片上传
 ```
 
 ### 4.3 反模式（勿用） / Anti-patterns
@@ -191,8 +194,9 @@ powershell -File scripts/verify_muse_multiturn.ps1
 | 2 | `再加 1 等于几？` | `5` |
 | 3 (Max) | `9+9=?` | `18` |
 | 4 (Max) | `再加 1 等于几？` | `19` |
+| 图 1 | 上传红色 PNG，`这是什么颜色？` | `红色` |
 
-含工具调用与多轮"继续"的完整会话：4 轮 · 9 步 · 缓存命中 88% · 全部成功。
+含工具调用与多轮"继续"的完整会话：4 轮 · 9 步 · 缓存命中 88% · 全部成功。图片输入也已实测（Muse 识别红色色块）。
 
 ---
 

@@ -102,7 +102,7 @@ case 'thinking_end':
 ## 4. 修复清单
 
 1. `dsh-llm-pi-ai/src/stream.ts`：`text_end` / `thinking_end` 从 `partial.content[contentIndex]` 带出 `textSignature` / `thinkingSignature`。见 `../patches/llm-pi-ai-stream-signature.patch`。
-2. `~/.dsh/settings.yaml`：`api: openai-responses` + `baseURL: https://opencode.ai/zen/go/v1` + `reasoningEfforts` 用 `xhigh`（无 `max`）。见 `../config/settings.yaml.example`。
+2. `~/.dsh/settings.yaml`：`api: openai-responses` + `baseURL: https://opencode.ai/zen/go/v1` + `reasoningEfforts` 用 `xhigh`（无 `max`）+ `input: [text, image]`（Muse 目录 `modalities.input` 含 image；不声明则 harness 拒绝图片上传）。见 `../config/settings.yaml.example`。
 3. （可选）`dsh-llm-pi-ai/src/catalog.ts`：`off: null` 按协议区分——`openai-completions` 下 absent（发 `thinking:{type:"disabled"}`），`openai-responses` 下 `null`（省略 `reasoning` 块，因为网关拒绝字面量 `"none"`）。
 
 ## 5. 验证

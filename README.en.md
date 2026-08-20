@@ -8,7 +8,7 @@
 | Gateway | OpenCode Zen Go — `https://opencode.ai/zen/go/v1` |
 | Protocol (correct) | **OpenAI Responses API** (`openai-responses`) |
 | Host | DeepSeek Harness (`deepseek-harness`), LLM layer `@deepseek-ai/dsh-llm-pi-ai` → `@earendil-works/pi-ai` |
-| Status | ✅ Verified: multi-turn + thinking replay + tool calls all work |
+| Status | ✅ Verified: multi-turn + thinking replay + tool calls + **image input** all work |
 
 ---
 
@@ -158,6 +158,9 @@ llm-pi-ai:
             high: high
             xhigh: xhigh                     # Muse supports xhigh (there is no max)
             max: xhigh
+          input:
+            - text
+            - image                          # required, or the harness rejects image uploads
 ```
 
 ### 4.3 Anti-patterns
@@ -189,8 +192,9 @@ Measured results (from this repo's verification):
 | 2 | `再加 1 等于几？` | `5` |
 | 3 (Max) | `9+9=?` | `18` |
 | 4 (Max) | `再加 1 等于几？` | `19` |
+| image | upload red PNG, `what color?` | `red` |
 
-A session including tool calls and repeated "continue" turns: 4 turns · 9 steps · 88% cache hit · all successful.
+A session including tool calls and repeated "continue" turns: 4 turns · 9 steps · 88% cache hit · all successful. Image input is verified too (Muse recognized the red swatch).
 
 ---
 
