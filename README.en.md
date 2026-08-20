@@ -2,6 +2,8 @@
 
 > Make `muse-spark-1.2-contributor` (the OpenCode Zen Go gateway model) work correctly in DeepSeek Harness (`deepseek-harness` / `pi-ai`): first-turn output plus lossless multi-turn thinking replay.
 
+> **Disclaimer**: This is a personal tech-sharing repo. It is **not** an official DeepSeek or opencode project and is unrelated to `deepseek-ai`, `sst/opencode`, or `opencode.ai`. Protocol/code analysis herein is based on public interfaces, for learning and personal use only.
+
 | Item | Value |
 | --- | --- |
 | Model | `muse-spark-1.2-contributor` (Muse Spark 1.2 Contributor) |
